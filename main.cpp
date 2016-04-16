@@ -2,7 +2,9 @@
 #include <cstdio>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 #include <stack>
+#include <map>
 
 #define AND     1
 #define ARRAY   2
@@ -70,6 +72,7 @@
 
 using namespace std;
 typedef pair<int, void*> TokenPairType;
+
 // 字典树节点结构定义
 struct TrieNode{
     char ch;
@@ -86,6 +89,9 @@ struct TrieNode{
     }
 };
 TrieNode * root = new TrieNode('*');
+
+map<string, int> sign_to_num;   // 将终结符和变量转化为数字  终结符-正 | 变量-负
+
 const int BUFFER_LEN = 100;                     // 输入缓存区大小
 char src_file[100] = "data.pas";                // 输入文件路径
 char out_file[100] = "word_stream.txt";         // 输出文件路径
@@ -137,6 +143,10 @@ public:
     // 读取整个文件，测试用
     void ReadFile(){
         fp_srcfile = fopen(src_file, "r");
+        if(fp_srcfile == NULL){
+            printf("open file error: %s\n", src_file);
+            exit(0);
+        }
         fseek(fp_srcfile, 0, SEEK_END);
         file_len = ftell(fp_srcfile);
         src_data = (char *)malloc(file_len + 6);
@@ -169,9 +179,17 @@ public:
     void install_keyword(const char * keyword, int code_of_kind){
         TrieNode * now = get_from_trie(keyword);
         now->code_of_kind = code_of_kind;
+
+        sign_to_num[string(keyword)] = code_of_kind;    // 将终结符映射添加到转化表中
     }
     // 预处理，将所有keyword插入到 Trie 树中
     void update_keyword_in_trie(){
+        sign_to_num.clear();
+        // 测试用例
+        install_keyword("a",  100);   install_keyword("b", 101);
+
+
+        // 保留字
         install_keyword("and",      AND);   install_keyword("array",    ARRAY);
         install_keyword("begin",    BEGIN); install_keyword("case",     CASE);
         install_keyword("const",    CONST); install_keyword("div",      DIV);
@@ -190,6 +208,20 @@ public:
         install_keyword("type",     TYPE);  install_keyword("until",    UNTIL);
         install_keyword("var",      VAR);   install_keyword("while",    WHILE);
         install_keyword("with",     WITH);
+        // 符号
+        install_keyword("+",    PLUS);      install_keyword("+",        PLUS);
+        install_keyword("-",    MINUS);     install_keyword("*",        MULTI);
+        install_keyword("/",    RDIV);      install_keyword("=",        EQ);
+        install_keyword("<",    LT);        install_keyword(">",        GT);
+        install_keyword("<=",   LE);        install_keyword(">=",       GE);
+        install_keyword("<>",   NE);        install_keyword("(",        LR_BRAC);
+        install_keyword(")",    RR_BRAC);   install_keyword(",",        COMMA);
+        install_keyword(".",    F_STOP);    install_keyword("..",       RANGE);
+        install_keyword(":",    COLON);     install_keyword(":=",       ASSIGN);
+        install_keyword(";",    SEMIC);     install_keyword("^",        CAP);
+        install_keyword("**",   EXP);       install_keyword("[",        LS_BRAC);
+        install_keyword("]",    RS_BRAC);   install_keyword("'",       Q_MARK);
+
     }
     // 从缓存区读取字符，兼顾双缓存区的维护
     char getchar_from_buffer(){
@@ -373,15 +405,25 @@ public:
         }
         return make_pair(-1, (void*) NULL);
     }
-    void work(){
+    vector<TokenPairType> work(){
         update_keyword_in_trie();
         fp_srcfile = fopen(src_file, "r");
         fp_outfile = fopen(out_file, "w");
+        if(fp_srcfile == NULL){
+            printf("open file error: %s\n", src_file);
+            exit(0);
+        }
+        if(fp_outfile == NULL){
+            printf("open file error: %s\n", out_file);
+            exit(0);
+        }
 
         // 先将左半缓存区读满
         int char_cnt = fread(read_buffer, 1, BUFFER_LEN / 2, fp_srcfile);
         if(char_cnt < BUFFER_LEN / 2) *(read_buffer + char_cnt) = EOF;
         TokenPairType now;
+        vector<TokenPairType> word_list;
+        word_list.clear();
         while(true){
             now = token_scan();
             if(now.first == -1) break;      // 词法分析完成
@@ -391,19 +433,164 @@ public:
                // printf("(%d, )\n", now.first);
                 continue;
             }
+            word_list.push_back(now);
             fprintf(fp_outfile, "(%d, %s)\n", now.first, (char*)now.second);
             //printf("(%d, %s)\n", now.first, (char*)now.second);
         }
         fclose(fp_srcfile);
         fclose(fp_outfile);
+
+        cout << "word_list: "<< word_list.size()<<endl;
+        printf("************Lexico Analyze Complete!************\n");
+        return word_list;
     }
 };
+
+const int MAX_STATE = 2000;         // 状态数的上限
+const int MAX_T = 500;              // 终结符数的上限
+const int MAX_V = 1000;             // 变量数的上限
+const int ACC   = 0x7fffffff;
+const int ERROR = 0;
+
+int Action[MAX_STATE][MAX_T];   // Si -> i, Rj -> -j, acc = 0x7fffffff, error = 0
+int Goto[MAX_STATE][MAX_V];
+
+class SyntaxAnalyzer{
+    stack<pair<int, int> > Stack;   // (状态，终结符-正 | 变量-负)
+    vector<string> Production;
+
+public:
+    SyntaxAnalyzer(){
+        while(!Stack.empty()) Stack.pop();
+        Stack.push(make_pair(0, 0));    // 代表(S0, '#')
+        Production.clear();
+    }
+    void turn_sign_to_num(){
+        sign_to_num["#"] = 0;
+        sign_to_num["S"] = -2;
+        sign_to_num["B"] = -3;
+
+    }
+
+
+    void Error_Handle(int error_src){
+        cout << "Error" << error_src <<endl;
+    }
+
+    void make_production(){
+        Production.push_back("#");
+        Production.push_back("S->B B");
+        Production.push_back("B->a B");
+        Production.push_back("B->b");
+    }
+    // 填充符号表
+    void make_table(){
+        memset(Action, 0, sizeof(Action));
+        memset(Goto, 0, sizeof(Goto));
+
+        Action[0][sign_to_num["a"]] = 3;
+        Action[0][sign_to_num["b"]] = 4;
+        Action[1][sign_to_num["#"]] = ACC;
+        Action[2][sign_to_num["a"]] = 3;
+        Action[2][sign_to_num["b"]] = 4;
+        Action[3][sign_to_num["a"]] = 3;
+        Action[3][sign_to_num["b"]] = 4;
+        Action[4][sign_to_num["a"]] = -3;
+        Action[4][sign_to_num["b"]] = -3;
+        Action[4][sign_to_num["#"]] = -3;
+        Action[5][sign_to_num["a"]] = -1;
+        Action[5][sign_to_num["b"]] = -1;
+        Action[5][sign_to_num["#"]] = -1;
+        Action[6][sign_to_num["a"]] = -2;
+        Action[6][sign_to_num["b"]] = -2;
+        Action[6][sign_to_num["#"]] = -2;
+
+        Goto[0][-sign_to_num["S"]] = 1;
+        Goto[0][-sign_to_num["B"]] = 2;
+        Goto[2][-sign_to_num["B"]] = 5;
+        Goto[3][-sign_to_num["B"]] = 6;
+    }
+
+    // 解析字符串，返回最后一个元素对应的符号串
+    int get_next_sign(string & now_product){
+        int i, len = now_product.length();
+        string now_sign = "";
+        if(now_product[len - 1] == '>' && now_product[len - 2] == '-'){
+            now_product.erase(now_product.end() - 2, now_product.end());
+            return 0;
+        }
+
+        for(i = len - 1; i >= 0; i--){
+            if(now_product[i] == ' ') break;
+            if(now_product[i] == '>' && now_product[i - 1] == '-') break;
+            now_sign = now_product[i] + now_sign;
+        }
+        now_product.erase(now_product.begin() + i + 1, now_product.end());
+        while(now_product[now_product.length() - 1] == ' ')
+            now_product.erase(now_product.end() - 1, now_product.end());
+        return sign_to_num[now_sign];
+    }
+
+    void work(vector<TokenPairType> word_buf){
+        int state, op, now_sign, now_T;
+        string now_product;
+        word_buf.push_back(make_pair(0, (void*)NULL));     // 输入序列后加入 '#'
+
+        turn_sign_to_num();
+        make_production();
+        make_table();
+
+        for(unsigned int i = 0; i < word_buf.size(); i++){
+            state = Stack.top().first;
+            now_T = word_buf[i].first;
+            op = Action[state][now_T];
+            //printf("%d  %d   op = %d\n", state, now_T, op);
+            if(op == ACC){
+                Stack.pop();        // 此时栈恢复到初始状态，方便下一个句子使用
+                //printf("Complete sentence number: %d\n", ++sentence_cnt);
+                continue;
+            }
+            if(op == ERROR){
+                printf("%d => ERROR!\n", now_T);
+                return;
+            }
+            // 移进操作
+            if(op > 0){
+                Stack.push(make_pair(op, now_T));
+                continue;
+            }
+            // 归约操作
+            now_product = Production[-op];
+            cout << now_product << endl;
+            while(true){
+                now_sign = get_next_sign(now_product);
+                if(now_sign == 0){
+                    now_sign = -get_next_sign(now_product);
+                    state = Stack.top().first;
+                    // 根据Goto表转移状态
+                    Stack.push(make_pair(Goto[state][now_sign], -now_sign));
+                    i--;        // 此时不能移进终结符
+                    break;
+                }
+                if(Stack.top().second == now_sign)
+                    Stack.pop();
+                else
+                    Error_Handle(now_sign);
+            }
+        }
+        printf("************Syntax Analyze Complete!************\n");
+    }
+};
+
+
 int main()
 {
     LexicoAnalyzer A;
+    SyntaxAnalyzer B;
 
-    A.ReadFile();
-    A.work();
+    vector<TokenPairType> word_list = A.work();
+
+    B.work(word_list);
 
     return 0;
 }
