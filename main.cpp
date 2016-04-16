@@ -465,18 +465,17 @@ public:
         Stack.push(make_pair(0, 0));    // 代表(S0, '#')
         Production.clear();
     }
+    void Error_Handle(int error_src){
+        cout << "Error" << error_src <<endl;
+    }
+    // 为变量编号(负数)，方便分析
     void turn_sign_to_num(){
         sign_to_num["#"] = 0;
         sign_to_num["S"] = -2;
         sign_to_num["B"] = -3;
 
     }
-
-
-    void Error_Handle(int error_src){
-        cout << "Error" << error_src <<endl;
-    }
-
+    // 产生式按照分析表中对应的编号填写
     void make_production(){
         Production.push_back("#");
         Production.push_back("S->B B");
@@ -530,7 +529,7 @@ public:
             now_product.erase(now_product.end() - 1, now_product.end());
         return sign_to_num[now_sign];
     }
-
+    // 语法分析过程
     void work(vector<TokenPairType> word_buf){
         int state, op, now_sign, now_T;
         string now_product;
@@ -581,7 +580,6 @@ public:
         printf("************Syntax Analyze Complete!************\n");
     }
 };
-
 
 int main()
 {
