@@ -70,6 +70,10 @@
 #define RS_BRAC 62
 #define Q_MARK  63
 
+#define INTEGER  64
+#define REALTYPE 65
+#define RELOP    45
+
 using namespace std;
 typedef pair<int, void*> TokenPairType;
 
@@ -93,8 +97,9 @@ TrieNode * root = new TrieNode('*');
 map<string, int> sign_to_num;   // 将终结符和变量转化为数字  终结符-正 | 变量-负
 
 const int BUFFER_LEN = 100;                     // 输入缓存区大小
-char src_file[100] = "data.pas";                // 输入文件路径
-char out_file[100] = "word_stream.txt";         // 输出文件路径
+const char * src_file = "data_for_syntax.pas";                // 输入文件路径
+const char * out_file = "word_stream.txt";         // 输出文件路径
+const char * LR1_table = "LR1_table.htm";              // LR1分析表
 FILE *fp_srcfile = NULL;                        // 输入文件指针
 FILE *fp_outfile = NULL;                        // 输出文件指针
 
@@ -186,8 +191,18 @@ public:
     void update_keyword_in_trie(){
         sign_to_num.clear();
         // 测试用例
-        install_keyword("a",  100);   install_keyword("b", 101);
+        install_keyword("id", ID);          install_keyword("semi", SEMIC);
+        install_keyword("digits", INT);     install_keyword("integer", INTEGER);
+        install_keyword("real", REALTYPE);  install_keyword("assignop", ASSIGN);
+        install_keyword("relop", RELOP);    install_keyword("addop", PLUS);
+        install_keyword("mulop", MULTI);    install_keyword("num", INT);
 
+//        const char * T_sign[T_NUM] = {
+//            "prog", "id", "(", ")", "semi", ",", "var", ":", "digits", "..", "of",
+//            "array", "integer", "real", "[", "]", "begin", "end", "function",
+//            "procedure", "if", "then", "else", "while", "do", "assignop", "relop",
+//            "addop", "mulop", "num", "not", "+", "-", "a", "b", "$"
+//        };   // 存储所有终结符
 
         // 保留字
         install_keyword("and",      AND);   install_keyword("array",    ARRAY);
@@ -202,7 +217,7 @@ public:
         install_keyword("nil",      NIL);   install_keyword("not",      NOT);
         install_keyword("of",       OF);    install_keyword("or",       OR);
         install_keyword("packed",   PACKED);install_keyword("procedure",PROC);
-        install_keyword("program",  PROG);  install_keyword("record",   RECORD);
+        install_keyword("prog",     PROG);  install_keyword("record",   RECORD);
         install_keyword("repeat",   REPEAT);install_keyword("set",      SET);
         install_keyword("then",     THEN);  install_keyword("to",       TO);
         install_keyword("type",     TYPE);  install_keyword("until",    UNTIL);
@@ -428,12 +443,13 @@ public:
             now = token_scan();
             if(now.first == -1) break;      // 词法分析完成
             if(now.first == -2) continue;
+
+            word_list.push_back(now);
             if(now.second == NULL){
                 fprintf(fp_outfile, "(%d, )\n", now.first);
                // printf("(%d, )\n", now.first);
                 continue;
             }
-            word_list.push_back(now);
             fprintf(fp_outfile, "(%d, %s)\n", now.first, (char*)now.second);
             //printf("(%d, %s)\n", now.first, (char*)now.second);
         }
@@ -449,71 +465,171 @@ public:
 const int MAX_STATE = 2000;         // 状态数的上限
 const int MAX_T = 500;              // 终结符数的上限
 const int MAX_V = 1000;             // 变量数的上限
+const int V_NUM = 25;
+const int T_NUM = 36;
 const int ACC   = 0x7fffffff;
 const int ERROR = 0;
+const char * T_sign[T_NUM] = {
+    "prog", "id", "(", ")", "semi", ",", "var", ":", "digits", "..", "of",
+    "array", "integer", "real", "[", "]", "begin", "end", "function",
+    "procedure", "if", "then", "else", "while", "do", "assignop", "relop",
+    "addop", "mulop", "num", "not", "+", "-", "a", "b", "$"
+};   // 存储所有终结符
+const char * V_sign[V_NUM] = {
+    "program", "subprogram_declarations", "identifier_list", "declarations",
+    "compound_statement", "declaration", "type", "standard_type",
+    "subprogram_declaration", "subprogram_head", "arguments", "parameter_list",
+    "optional_statements", "statement_list", "statement", "procedure_statement",
+    "variable", "expression", "expression_list", "simple_expression", "term",
+    "factor", "sign", "S", "B"
+};
+
 
 int Action[MAX_STATE][MAX_T];   // Si -> i, Rj -> -j, acc = 0x7fffffff, error = 0
 int Goto[MAX_STATE][MAX_V];
+map<string, int> get_product_num;
+
 
 class SyntaxAnalyzer{
     stack<pair<int, int> > Stack;   // (状态，终结符-正 | 变量-负)
     vector<string> Production;
+    int production_cnt;
 
 public:
     SyntaxAnalyzer(){
         while(!Stack.empty()) Stack.pop();
         Stack.push(make_pair(0, 0));    // 代表(S0, '#')
         Production.clear();
+        production_cnt = 0;
     }
-    void Error_Handle(int error_src){
-        cout << "Error" << error_src <<endl;
+    void Error_Handle(int i, int error_src){
+        printf("Error: No. = %d,  name = %d\n", i, error_src);
     }
     // 为变量编号(负数)，方便分析
     void turn_sign_to_num(){
-        sign_to_num["#"] = 0;
-        sign_to_num["S"] = -2;
-        sign_to_num["B"] = -3;
+        sign_to_num["$"] = 0;
+        sign_to_num["@"] = 0x3f3f3f3f;  // 表示空转移符号 ε
+//        sign_to_num["S"] = -2;
+//        sign_to_num["B"] = -3;
 
     }
     // 产生式按照分析表中对应的编号填写
     void make_production(){
-        Production.push_back("#");
-        Production.push_back("S->B B");
-        Production.push_back("B->a B");
-        Production.push_back("B->b");
+        Production.push_back("$");
     }
+
+
     // 填充符号表
     void make_table(){
+        char read_item[1000];
+        char production_buf[1000];
+        string now_production;
+
+        int len, V_cnt = -1, now_state, next_state;
         memset(Action, 0, sizeof(Action));
         memset(Goto, 0, sizeof(Goto));
+//
+//        Action[0][sign_to_num["a"]] = 3;
+//        Action[0][sign_to_num["b"]] = 4;
+//        Action[1][sign_to_num["#"]] = ACC;
+//        Action[2][sign_to_num["a"]] = 3;
+//        Action[2][sign_to_num["b"]] = 4;
+//        Action[3][sign_to_num["a"]] = 3;
+//        Action[3][sign_to_num["b"]] = 4;
+//        Action[4][sign_to_num["a"]] = -3;
+//        Action[4][sign_to_num["b"]] = -3;
+//        Action[4][sign_to_num["#"]] = -3;
+//        Action[5][sign_to_num["a"]] = -1;
+//        Action[5][sign_to_num["b"]] = -1;
+//        Action[5][sign_to_num["#"]] = -1;
+//        Action[6][sign_to_num["a"]] = -2;
+//        Action[6][sign_to_num["b"]] = -2;
+//        Action[6][sign_to_num["#"]] = -2;
+//
+//        Goto[0][-sign_to_num["S"]] = 1;
+//        Goto[0][-sign_to_num["B"]] = 2;
+//        Goto[2][-sign_to_num["B"]] = 5;
+//        Goto[3][-sign_to_num["B"]] = 6;
 
-        Action[0][sign_to_num["a"]] = 3;
-        Action[0][sign_to_num["b"]] = 4;
-        Action[1][sign_to_num["#"]] = ACC;
-        Action[2][sign_to_num["a"]] = 3;
-        Action[2][sign_to_num["b"]] = 4;
-        Action[3][sign_to_num["a"]] = 3;
-        Action[3][sign_to_num["b"]] = 4;
-        Action[4][sign_to_num["a"]] = -3;
-        Action[4][sign_to_num["b"]] = -3;
-        Action[4][sign_to_num["#"]] = -3;
-        Action[5][sign_to_num["a"]] = -1;
-        Action[5][sign_to_num["b"]] = -1;
-        Action[5][sign_to_num["#"]] = -1;
-        Action[6][sign_to_num["a"]] = -2;
-        Action[6][sign_to_num["b"]] = -2;
-        Action[6][sign_to_num["#"]] = -2;
+        fp_srcfile = fopen(LR1_table, "r");
 
-        Goto[0][-sign_to_num["S"]] = 1;
-        Goto[0][-sign_to_num["B"]] = 2;
-        Goto[2][-sign_to_num["B"]] = 5;
-        Goto[3][-sign_to_num["B"]] = 6;
+        // 首先读入终结符和变量
+        fscanf(fp_srcfile, "%s", read_item);    // <tr>
+        for(int i = 0; i < T_NUM; i++){
+            fscanf(fp_srcfile, " <td nowrap>%s", read_item);
+            read_item[strlen(read_item) - 5] = '\0';
+//            printf("\"%s\", ", read_item);
+        }
+        // 给变量编号
+        for(int i = 0; i < V_NUM; i++){
+            fscanf(fp_srcfile, " <td nowrap>%s", read_item);
+            read_item[strlen(read_item) - 5] = '\0';
+            sign_to_num[string(read_item)] = --V_cnt;
+//            printf("\"%s\", ", read_item);
+        }
+        fscanf(fp_srcfile, "%s", read_item);    // </tr>
+        while(!feof(fp_srcfile)){
+            fscanf(fp_srcfile, "%s", read_item);    // <tr>
+            fscanf(fp_srcfile, " <td nowrap>%d", &now_state);
+            fscanf(fp_srcfile, "%s", read_item);    // </td>
+            // 生成 Action 表
+            for(int i = 0; i < T_NUM; i++){
+                fscanf(fp_srcfile, " <td nowrap>%s", read_item);
+                len = strlen(read_item);
+                read_item[len - 5] = '\0';
+
+                if(strcmp(read_item, "&nbsp;") == 0) continue;      // 空
+                if(read_item[0] == 'a'){                            // acc
+                    Action[now_state][sign_to_num[T_sign[i]]] = ACC;
+                }
+                if(read_item[0] == 's'){                            // shift
+                    next_state = atoi(read_item + 11);
+                    Action[now_state][sign_to_num[T_sign[i]]] = next_state;
+                }
+                if(read_item[0] == 'r'){                            // reduce
+                    int k = 12, now_cnt = 0;
+                    while(k < len){                                 // 将&nbsp;变为' '
+                        if(read_item[k] != '&')
+                            production_buf[now_cnt++] = read_item[k++];
+                        else{
+                            production_buf[now_cnt++] = ' ';
+                            k += 6;
+                        }
+                    }
+                    production_buf[now_cnt] = '\0';
+                    // 给产生式编号并填充分析表
+                    now_production = string(production_buf);
+                    if(get_product_num.find(now_production) == get_product_num.end()){
+                        Production.push_back(now_production);
+                        get_product_num[now_production] = --production_cnt;
+                    }
+                    Action[now_state][sign_to_num[T_sign[i]]] = get_product_num[now_production];
+                }
+            }
+
+            // 生成 Goto 表
+            for(int i = 0; i < V_NUM; i++){
+                fscanf(fp_srcfile, " <td nowrap>%s", read_item);
+                read_item[strlen(read_item) - 5] = '\0';
+                next_state = atoi(read_item);
+
+                Goto[now_state][-sign_to_num[V_sign[i]]] = next_state;
+//                printf("%d %s\n", i, read_item);
+            }
+            fscanf(fp_srcfile, "%s", read_item);    // </tr>
+        }
+        fclose(fp_srcfile);
     }
 
     // 解析字符串，返回最后一个元素对应的符号串
     int get_next_sign(string & now_product){
+        // 首先去除句尾空格
+        while(now_product[now_product.length() - 1] == ' ')
+            now_product.erase(now_product.end() - 1, now_product.end());
+
         int i, len = now_product.length();
         string now_sign = "";
+
         if(now_product[len - 1] == '>' && now_product[len - 2] == '-'){
             now_product.erase(now_product.end() - 2, now_product.end());
             return 0;
@@ -525,8 +641,6 @@ public:
             now_sign = now_product[i] + now_sign;
         }
         now_product.erase(now_product.begin() + i + 1, now_product.end());
-        while(now_product[now_product.length() - 1] == ' ')
-            now_product.erase(now_product.end() - 1, now_product.end());
         return sign_to_num[now_sign];
     }
     // 语法分析过程
@@ -550,7 +664,7 @@ public:
                 continue;
             }
             if(op == ERROR){
-                printf("%d => ERROR!\n", now_T);
+                Error_Handle(i, now_T);
                 return;
             }
             // 移进操作
@@ -571,10 +685,11 @@ public:
                     i--;        // 此时不能移进终结符
                     break;
                 }
+                if(now_sign == sign_to_num["@"]) continue;  // 空转移
                 if(Stack.top().second == now_sign)
                     Stack.pop();
                 else
-                    Error_Handle(now_sign);
+                    Error_Handle(i, now_sign);
             }
         }
         printf("************Syntax Analyze Complete!************\n");
@@ -589,6 +704,6 @@ int main()
     vector<TokenPairType> word_list = A.work();
 
     B.work(word_list);
-
+//    B.make_table();
     return 0;
 }
