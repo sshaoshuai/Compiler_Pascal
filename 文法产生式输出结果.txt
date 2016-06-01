@@ -1,4 +1,4 @@
-word_list: 236
+word_list: 248
 ************Lexico Analyze Complete!************
 
 identifier_list -> id   (36,first)
@@ -25,7 +25,7 @@ type -> array [ digits .. digits ] of standard_type   (21,of) (62,(null)) (37,50
 declaration -> declaration semi identifier_list : type   (56,(null)) (58,(null))
 declarations -> var declaration semi   (58,(null)) (33,Var)
 
-// 进入子过程部分
+// 子程序定义
 subprogram_declarations -> @
 identifier_list -> id   (36,ll)
 identifier_list -> identifier_list , id   (36,rr) (52,(null))
@@ -39,7 +39,7 @@ identifier_list -> identifier_list , id   (36,t) (52,(null))
 identifier_list -> identifier_list , id   (36,i) (52,(null))
 identifier_list -> identifier_list , id   (36,j) (52,(null))
 identifier_list -> identifier_list , id   (36,mid2) (52,(null))
-standard_type -> integer   (64,integer)
+standard_type -> real   (65,real)
 type -> standard_type
 declaration -> identifier_list : type   (56,(null))
 declarations -> var declaration semi   (58,(null)) (33,var)
@@ -226,7 +226,9 @@ subprogram_declaration -> subprogram_head declarations compound_statement
 subprogram_declarations -> subprogram_declarations subprogram_declaration semi   (58,(null))
 
 
-// 进入主程序部分
+// 主程序运行过程
+
+// 函数调用
 factor -> id   (36,t)
 term -> factor
 simple_expression -> term
@@ -235,6 +237,33 @@ expression_list -> expression
 procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,readln)
 statement -> procedure_statement
 statement_list -> statement
+
+//赋值语句 - 表达式翻译  tot := i + j * k - tot / m;
+variable -> id   (36,tot)
+assignop -> :=   (57,(null))
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+addop -> +   (40,(null))
+factor -> id   (36,j)
+term -> factor
+mulop -> *   (42,(null))
+factor -> id   (36,k)
+term -> term mulop factor
+simple_expression -> simple_expression addop term
+addop -> -   (41,(null))
+factor -> id   (36,tot)
+term -> factor
+mulop -> /   (43,(null))
+factor -> id   (36,m)
+term -> term mulop factor
+simple_expression -> simple_expression addop term
+expression -> simple_expression
+statement -> variable assignop expression
+
+statement_list -> statement_list semi statement   (58,(null))
+
+
 factor -> id   (36,j)
 term -> factor
 simple_expression -> term
@@ -337,6 +366,27 @@ program -> prog id ( identifier_list ) semi declarations subprogram_declarations
 67
 ************Syntax Analyze Complete!************
 
+-------------TableName: -----------------
+name = i         width = 4       type = integer  offset = 0
+name = j         width = 4       type = integer  offset = 4
+name = k         width = 4       type = integer  offset = 8
+name = p         width = 4       type = integer  offset = 12
+name = tot       width = 4       type = integer  offset = 16
+name = n         width = 4       type = integer  offset = 20
+name = t         width = 4       type = integer  offset = 24
+name = m         width = 4       type = integer  offset = 28
+name = l         width = 20024   type = array(5006,integer)      offset = 32
+name = w         width = 20024   type = array(5006,integer)      offset = 20056
+name = f         width = 20028   type = array(5007,integer)      offset = 40080
+name = qsort     width = 4       type = procedure        offset = 60108
+-------------TableName:qsort -----------------
+name = ll        width = 4       type = integer  offset = 0
+name = rr        width = 4       type = integer  offset = 4
+name = mid       width = 8       type = real     offset = 8
+name = t         width = 8       type = real     offset = 16
+name = i         width = 8       type = real     offset = 24
+name = j         width = 8       type = real     offset = 32
+name = mid2      width = 8       type = real     offset = 40
 
-Process returned 0 (0x0)   execution time : 0.717 s
+Process returned 0 (0x0)   execution time : 0.594 s
 Press any key to continue.

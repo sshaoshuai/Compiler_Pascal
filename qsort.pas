@@ -1,16 +1,16 @@
 Prog  SSS(first, second);
 Var
-  i,j,k,p,tot,n,t,m:integer;
+  hha, i,j,k,p,tot,n,t,m:real;
   l,w:array[1..5006]of integer;
   f:array[0..5006]of integer;
 Procedure qsort(ll,rr:integer);
   var
-    mid,t,i,j,mid2:real;
+    mid,t,i,j,mid2,l:integer;
   begin
     i:=ll;j:=rr;
     mid:=l;
-      while (l<mid) do inc(i);
-      while (l>mid) do dec(j);
+      while (i<mid) do inc(i);
+      while (j>mid) do dec(j);
       if i<j then
       begin
           t:=l;l:=l;l:=t;
@@ -22,6 +22,7 @@ Procedure qsort(ll,rr:integer);
   end;
 Begin
   readln(t);
+  tot := i + j * k - tot / m;	
   while (j < t) do
     begin
       readln(n);

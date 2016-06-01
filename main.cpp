@@ -113,6 +113,11 @@ struct SignTableType{
     int width;
     int offset;         // 在过程数据区中的相对地址
     void * toVal;       // 指向过程的符号表地址
+    SignTableType(){
+        name = type = "";
+        width = offset = 0;
+        toVal = (void*) NULL;
+    }
 };
 struct NestSignTable{
     SignTableType SignTable[100];           // 存储具体符号表条目
@@ -132,6 +137,8 @@ struct NestSignTable{
 pair<NestSignTable*, int> stack_sign_table[10];     // 存储符号表层次的栈
 int table_top = 0;                             // 栈顶
 NestSignTable* nowSignTable = NULL;                     // 当前符号表指针
+int temp_var_cnt = 0;                           // 此刻使用的临时变量的个数
+int row_cnt = 0;                                // 统计中间代码的行数
 
 
 
@@ -668,15 +675,17 @@ public:
     // 填充符号表
     void enterTable(NestSignTable * nowTable, string name, string type, int width, void *toVal){
         // 哈希一下，得到其在符号表中的下标
-        nowTable->get_SignTable_pos[name] = ++nowTable->sign_table_cnt;
+        if(nowTable->get_SignTable_pos.find(name) == nowTable->get_SignTable_pos.end())
+            nowTable->get_SignTable_pos[name] = ++nowTable->sign_table_cnt;
         // 将变量的名字和类型填入符号表中
-        nowTable->SignTable[nowTable->sign_table_cnt].name = name;
-        nowTable->SignTable[nowTable->sign_table_cnt].type = type;
-        nowTable->SignTable[nowTable->sign_table_cnt].width = width;
-        nowTable->SignTable[nowTable->sign_table_cnt].offset = nowTable->offset;
-        nowTable->SignTable[nowTable->sign_table_cnt].toVal = toVal;
+        int now_index = nowTable->get_SignTable_pos[name];
+        nowTable->SignTable[now_index].name = name;
+        nowTable->SignTable[now_index].type = type;
+        nowTable->SignTable[now_index].width = width;
+        nowTable->SignTable[now_index].offset = nowTable->offset;
+        nowTable->SignTable[now_index].toVal = toVal;
         nowTable->offset += width;
-        //cout << name << " " << type << " " << nowTable->sign_table_cnt << endl;
+        //cout << n2ame << " " << type << " " << nowTable->sign_table_cnt << endl;
     }
 
 
@@ -688,9 +697,44 @@ public:
         return newTable;
     }
 
+    // 到符号表中找到名为 name 的位置
+    int lookup(string name){
+        if(nowSignTable->get_SignTable_pos.find(name) == nowSignTable->get_SignTable_pos.end())
+            return -1;  // 符号表中没找到，返回错误
+        return nowSignTable->get_SignTable_pos[name];
+    }
+    // 使用新的临时变量，并通过括号匹配性质重复使用临时变量
+    AttrNodeType newtemp(){
+        char temp[10];
+        sprintf(temp, "%d", temp_var_cnt++);
+        string tempName = "$" + string(temp);
+        // 如果不在符号表中则在符号表中申请一个位置
+        if(nowSignTable->get_SignTable_pos.find(tempName) == nowSignTable->get_SignTable_pos.end())
+            enterTable(nowSignTable, tempName, "TempVar", 4, (void*)NULL);
+        int now_index = nowSignTable->get_SignTable_pos[tempName];
+        AttrNodeType nowTemp;
+        nowTemp.name = nowSignTable->SignTable[now_index].name;
+        nowTemp.type = nowSignTable->SignTable[now_index].type;
+        nowTemp.width = 4;
+        return nowTemp;
+    }
+
+    // 生成中间代码
+    void gencode(AttrNodeType *ans, AttrNodeType *A, AttrNodeType *op, AttrNodeType *B){
+        printf("%d:\t", ++row_cnt);
+        if(A == NULL && op == NULL){
+            cout << ans->name << " := " << B->name  << endl;
+            return;
+        }
+        cout << ans->name << " := " << A->name << " " << op->name << " " << B->name << endl;
+    }
+
+
     // 根据产生式进行语义分析
     void SemanticAnalysis(string Production, AttrNodeType & ansAttr)
     {
+        ansAttr.name = ansAttr.type = ansAttr.value = "";
+        ansAttr.width = 0;
         // 处理参数列表
         if(Production == "identifier_list -> id"){
             attr_node_list.clear();         // 待处理队列清空
@@ -749,10 +793,18 @@ public:
             return;
         }
 
-        // 过程和函数的翻译
+        // 过程和函数声明和定义的翻译
         if(Production == "subprogram_declarations -> @"){
             // 创建新符号表，并将当前符号表更新为此新符号表，同时更新了符号表栈
             nowSignTable = mktable(nowSignTable);
+            return;
+        }
+        if(Production == "parameter_list -> identifier_list : type"){
+            // 函数声明时的参数列表
+            // 将队列中的属性节点依次填入对应的符号表中
+            for(unsigned int i = 0; i < attr_node_list.size(); i++)
+                enterTable(nowSignTable, attr_node_list[i].name, Stack_attr[attr_top].type,
+                            Stack_attr[attr_top].width, (void*)NULL);
             return;
         }
         if(Production == "subprogram_head -> procedure id arguments semi"){
@@ -778,6 +830,74 @@ public:
             return;
         }
 
+        // 过程和函数调用的翻译
+
+
+
+        // 表达式计算及赋值语句翻译
+        // 先进行符号翻译
+        if(Production == "assignop -> :="){
+            ansAttr.name = ansAttr.type = ":=";
+            return;
+        }
+        if(Production == "addop -> +" || Production == "addop -> -"
+           || Production == "addop -> or"){
+            ansAttr.name = ansAttr.type = Production[Production.length() - 1];
+            if (Production == "addop -> or")
+                ansAttr.name = ansAttr.type = "or";
+            return;
+        }
+        if(Production == "mulop -> *" || Production == "mulop -> /"){
+            ansAttr.name = ansAttr.type = Production[Production.length() - 1];
+            return;
+        }
+        if(Production == "mulop -> div" || Production == "mulop -> mod"
+           || Production == "mulop -> and"){
+            ansAttr.name = ansAttr.type = Production.substr(Production.length() - 3, 3);
+            return;
+        }
+        if(Production == "sign -> +" || Production == "sign -> -"){
+            ansAttr.name = ansAttr.type = Production[Production.length() - 1];
+            return;
+        }
+        // 表达式翻译
+        if(Production == "variable -> id" || Production == "factor -> id"
+           || Production == "term -> factor" || Production == "simple_expression -> term"
+           || Production == "expression -> simple_expression"){
+            // 赋值语句左值
+            int pos = lookup(Stack_attr[attr_top].name);
+            // 必须是标识符才报错，因为可能其他的非算数表达式也可能用到这些产生式
+            if(pos < 0 && Stack_attr[attr_top].type == "ID"){
+                printf("Error:-----Can't find name in SignTable(%s): %s\n",
+                        nowSignTable->name.c_str(), Stack_attr[attr_top].name.c_str());
+                return;
+            }
+
+            ansAttr = Stack_attr[attr_top]; // 将 id 的属性给variable
+            return;
+        }
+        if(Production == "term -> term mulop factor" ||
+           Production == "simple_expression -> simple_expression addop term"){
+            // 利用括号匹配性质减少临时变量的数量
+            if(Stack_attr[attr_top - 2].type == "TempVar") temp_var_cnt--;
+            if(Stack_attr[attr_top].type == "TempVar") temp_var_cnt--;
+            ansAttr = newtemp();            // 使用临时变量
+            gencode(&ansAttr, &Stack_attr[attr_top - 2], &Stack_attr[attr_top - 1],
+                    &Stack_attr[attr_top]);
+            return;
+        }
+        if(Production == "statement -> variable assignop expression"){
+            // 利用括号匹配性质减少临时变量的数量
+            int pos = lookup(Stack_attr[attr_top - 2].name);
+            if(pos < 0 && Stack_attr[attr_top].type == "ID"){
+                printf("Error:-----Can't find name in SignTable(%s): %s\n",
+                        nowSignTable->name.c_str(), Stack_attr[attr_top].name.c_str());
+                return;
+            }
+
+            gencode(&Stack_attr[attr_top - 2], NULL, NULL, &Stack_attr[attr_top]);
+            return;
+        }
 
 
 
@@ -792,9 +912,9 @@ public:
         if(now_T_data != NULL){
             temp= string((char*)now_T_data);
         }
-
         if(now_T == ID){
             T_Node.name = temp;
+            T_Node.type = "ID";
         }
         T_Node.value = temp;
     }
@@ -847,7 +967,7 @@ public:
             }
             // 归约操作
             now_product = Production[-op];
-           // cout << now_product << endl;    // 用这个产生式去归约
+            //cout << now_product << endl;    // 用这个产生式去归约
 
             string temp_product = now_product;      // 暂存产生式
 
@@ -870,7 +990,7 @@ public:
 //                    cout << temp_product << "   ";
 //                    for(unsigned int i = 0; i < now_T_list.size(); i++)
 //                        printf("(%d,%s) ", now_T_list[i].first, (char*)now_T_list[i].second);
-
+//                    cout << endl;
                     now_T_list.clear(); // 本次产生式分析完毕，清空临时序列
 //                    cout << endl;
                     break;
@@ -910,7 +1030,6 @@ void print_SignTable(){
                now->SignTable[i].type == "procedure"){
                 Q.push((NestSignTable*) now->SignTable[i].toVal);
             }
-
         }
     }
 
