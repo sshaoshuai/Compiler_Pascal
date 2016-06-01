@@ -5,6 +5,8 @@
 #include <vector>
 #include <stack>
 #include <map>
+#include <queue>
+#define MP make_pair
 
 #define AND     1
 #define ARRAY   2
@@ -97,11 +99,55 @@ TrieNode * root = new TrieNode('*');
 map<string, int> sign_to_num;   // 将终结符和变量转化为数字  终结符-正 | 变量-负
 
 const int BUFFER_LEN = 100;                     // 输入缓存区大小
-const char * src_file = "data_for_syntax.pas";                // 输入文件路径
+const char * src_file = "qsort.pas";                // 输入文件路径
 const char * out_file = "word_stream.txt";         // 输出文件路径
-const char * LR1_table = "LR1_table.htm";              // LR1分析表
+const char * LR1_table = "LR1_table1.htm";         // LR1分析表
 FILE *fp_srcfile = NULL;                        // 输入文件指针
 FILE *fp_outfile = NULL;                        // 输出文件指针
+
+vector<TokenPairType> word_list;
+
+struct SignTableType{
+    string name;
+    string type;
+    int width;
+    int offset;         // 在过程数据区中的相对地址
+    void * toVal;       // 指向过程的符号表地址
+};
+struct NestSignTable{
+    SignTableType SignTable[100];           // 存储具体符号表条目
+    int sign_table_cnt;                     // 已分配条目
+    map<string, int> get_SignTable_pos;     // 此符号表的哈希索引
+    NestSignTable *lastTable;               // 指向上一层符号表
+    int offset;                             // 当前数据偏移量
+    string name;                            // 当前子函数的名称
+    string type;                            // 当前子函数的类型
+    string ret_val;                         // 当前子函数的返回类型
+    NestSignTable(){
+        get_SignTable_pos.clear();
+        sign_table_cnt = offset = 0;
+        lastTable = NULL; name = type = ret_val = "";
+    }
+};
+pair<NestSignTable*, int> stack_sign_table[10];     // 存储符号表层次的栈
+int table_top = 0;                             // 栈顶
+NestSignTable* nowSignTable = NULL;                     // 当前符号表指针
+
+
+
+// 属性节点定义
+struct AttrNodeType{
+    string name;
+    string type;
+    string value;
+    int width;
+    AttrNodeType(){
+        name = type = value = "";
+        width = 0;
+    }
+}Stack_attr[1000];    // 属性栈
+int attr_top = 0;   // 栈顶
+
 
 // 词法分析器类
 class LexicoAnalyzer{
@@ -194,15 +240,9 @@ public:
         install_keyword("id", ID);          install_keyword("semi", SEMIC);
         install_keyword("digits", INT);     install_keyword("integer", INTEGER);
         install_keyword("real", REALTYPE);  install_keyword("assignop", ASSIGN);
-        install_keyword("relop", RELOP);    install_keyword("addop", PLUS);
-        install_keyword("mulop", MULTI);    install_keyword("num", INT);
-
-//        const char * T_sign[T_NUM] = {
-//            "prog", "id", "(", ")", "semi", ",", "var", ":", "digits", "..", "of",
-//            "array", "integer", "real", "[", "]", "begin", "end", "function",
-//            "procedure", "if", "then", "else", "while", "do", "assignop", "relop",
-//            "addop", "mulop", "num", "not", "+", "-", "a", "b", "$"
-//        };   // 存储所有终结符
+        //install_keyword("relop", RELOP);    install_keyword("addop", PLUS);
+        //install_keyword("mulop", MULTI);
+        install_keyword("num", INT);
 
         // 保留字
         install_keyword("and",      AND);   install_keyword("array",    ARRAY);
@@ -284,6 +324,7 @@ public:
     TokenPairType install_token(char * token, int code_of_kind){
         TrieNode * now = get_from_trie(token);
         now->code_of_kind = (now->code_of_kind == -1) ? code_of_kind : now->code_of_kind;
+
         return make_pair(now->code_of_kind, (void*)token);
     }
     // 开始扫描一个单词
@@ -420,7 +461,7 @@ public:
         }
         return make_pair(-1, (void*) NULL);
     }
-    vector<TokenPairType> work(){
+    void work(){
         update_keyword_in_trie();
         fp_srcfile = fopen(src_file, "r");
         fp_outfile = fopen(out_file, "w");
@@ -437,7 +478,6 @@ public:
         int char_cnt = fread(read_buffer, 1, BUFFER_LEN / 2, fp_srcfile);
         if(char_cnt < BUFFER_LEN / 2) *(read_buffer + char_cnt) = EOF;
         TokenPairType now;
-        vector<TokenPairType> word_list;
         word_list.clear();
         while(true){
             now = token_scan();
@@ -450,6 +490,9 @@ public:
                // printf("(%d, )\n", now.first);
                 continue;
             }
+            // 需要新申请一块内存，否则所有的word_list.second都指向了同一个地址
+            word_list[word_list.size() - 1].second = malloc(strlen((char*)now.second) + 1);
+            memcpy(word_list[word_list.size() - 1].second, (char*)now.second, strlen((char*)now.second) + 1);
             fprintf(fp_outfile, "(%d, %s)\n", now.first, (char*)now.second);
             //printf("(%d, %s)\n", now.first, (char*)now.second);
         }
@@ -457,33 +500,22 @@ public:
         fclose(fp_outfile);
 
         cout << "word_list: "<< word_list.size()<<endl;
-        printf("************Lexico Analyze Complete!************\n");
-        return word_list;
+        printf("************Lexico Analyze Complete!************\n\n");
+        return;
     }
 };
 
 const int MAX_STATE = 2000;         // 状态数的上限
 const int MAX_T = 500;              // 终结符数的上限
 const int MAX_V = 1000;             // 变量数的上限
-const int V_NUM = 25;
-const int T_NUM = 36;
+const int V_NUM = 29;
+const int T_NUM = 46;
 const int ACC   = 0x7fffffff;
 const int ERROR = 0;
-const char * T_sign[T_NUM] = {
-    "prog", "id", "(", ")", "semi", ",", "var", ":", "digits", "..", "of",
-    "array", "integer", "real", "[", "]", "begin", "end", "function",
-    "procedure", "if", "then", "else", "while", "do", "assignop", "relop",
-    "addop", "mulop", "num", "not", "+", "-", "a", "b", "$"
-};   // 存储所有终结符
-const char * V_sign[V_NUM] = {
-    "program", "subprogram_declarations", "identifier_list", "declarations",
-    "compound_statement", "declaration", "type", "standard_type",
-    "subprogram_declaration", "subprogram_head", "arguments", "parameter_list",
-    "optional_statements", "statement_list", "statement", "procedure_statement",
-    "variable", "expression", "expression_list", "simple_expression", "term",
-    "factor", "sign", "S", "B"
-};
 
+char * T_sign[T_NUM];               // LR1表中的终结符
+char * V_sign[V_NUM];               // LR1表中的变量
+// ε 空符号
 
 int Action[MAX_STATE][MAX_T];   // Si -> i, Rj -> -j, acc = 0x7fffffff, error = 0
 int Goto[MAX_STATE][MAX_V];
@@ -492,12 +524,16 @@ map<string, int> get_product_num;
 
 class SyntaxAnalyzer{
     stack<pair<int, int> > Stack;   // (状态，终结符-正 | 变量-负)
+    stack<pair<int, void*> > Stack_word;        // 存储词法分析对应的终结符数据域
+
     vector<string> Production;
     int production_cnt;
+    vector<AttrNodeType> attr_node_list;     // 语义分析时的属性节点队列
 
 public:
     SyntaxAnalyzer(){
         while(!Stack.empty()) Stack.pop();
+        while(!Stack_word.empty()) Stack_word.pop();
         Stack.push(make_pair(0, 0));    // 代表(S0, '#')
         Production.clear();
         production_cnt = 0;
@@ -509,8 +545,6 @@ public:
     void turn_sign_to_num(){
         sign_to_num["$"] = 0;
         sign_to_num["@"] = 0x3f3f3f3f;  // 表示空转移符号 ε
-//        sign_to_num["S"] = -2;
-//        sign_to_num["B"] = -3;
 
     }
     // 产生式按照分析表中对应的编号填写
@@ -518,8 +552,7 @@ public:
         Production.push_back("$");
     }
 
-
-    // 填充符号表
+    // 填充Action 和 Goto符号表
     void make_table(){
         char read_item[1000];
         char production_buf[1000];
@@ -528,48 +561,36 @@ public:
         int len, V_cnt = -1, now_state, next_state;
         memset(Action, 0, sizeof(Action));
         memset(Goto, 0, sizeof(Goto));
-//
-//        Action[0][sign_to_num["a"]] = 3;
-//        Action[0][sign_to_num["b"]] = 4;
-//        Action[1][sign_to_num["#"]] = ACC;
-//        Action[2][sign_to_num["a"]] = 3;
-//        Action[2][sign_to_num["b"]] = 4;
-//        Action[3][sign_to_num["a"]] = 3;
-//        Action[3][sign_to_num["b"]] = 4;
-//        Action[4][sign_to_num["a"]] = -3;
-//        Action[4][sign_to_num["b"]] = -3;
-//        Action[4][sign_to_num["#"]] = -3;
-//        Action[5][sign_to_num["a"]] = -1;
-//        Action[5][sign_to_num["b"]] = -1;
-//        Action[5][sign_to_num["#"]] = -1;
-//        Action[6][sign_to_num["a"]] = -2;
-//        Action[6][sign_to_num["b"]] = -2;
-//        Action[6][sign_to_num["#"]] = -2;
-//
-//        Goto[0][-sign_to_num["S"]] = 1;
-//        Goto[0][-sign_to_num["B"]] = 2;
-//        Goto[2][-sign_to_num["B"]] = 5;
-//        Goto[3][-sign_to_num["B"]] = 6;
 
         fp_srcfile = fopen(LR1_table, "r");
+        if(fp_srcfile == NULL){
+            printf("open file error: %s\n", src_file);
+            exit(0);
+        }
 
         // 首先读入终结符和变量
         fscanf(fp_srcfile, "%s", read_item);    // <tr>
         for(int i = 0; i < T_NUM; i++){
             fscanf(fp_srcfile, " <td nowrap>%s", read_item);
             read_item[strlen(read_item) - 5] = '\0';
+            T_sign[i] = (char *)malloc(strlen(read_item + 6));
+            strcpy(T_sign[i], read_item);
 //            printf("\"%s\", ", read_item);
         }
         // 给变量编号
         for(int i = 0; i < V_NUM; i++){
             fscanf(fp_srcfile, " <td nowrap>%s", read_item);
             read_item[strlen(read_item) - 5] = '\0';
-            sign_to_num[string(read_item)] = --V_cnt;
+            V_sign[i] = (char *)malloc(strlen(read_item + 6));
+            strcpy(V_sign[i], read_item);
+            sign_to_num[string(read_item)] = --V_cnt;   // 变量的编号是负的
 //            printf("\"%s\", ", read_item);
         }
         fscanf(fp_srcfile, "%s", read_item);    // </tr>
-        while(!feof(fp_srcfile)){
+        while(true){
             fscanf(fp_srcfile, "%s", read_item);    // <tr>
+            //printf("%s\n", read_item);
+            if(strcmp(read_item, "</table>") == 0) break;
             fscanf(fp_srcfile, " <td nowrap>%d", &now_state);
             fscanf(fp_srcfile, "%s", read_item);    // </td>
             // 生成 Action 表
@@ -601,7 +622,7 @@ public:
                     now_production = string(production_buf);
                     if(get_product_num.find(now_production) == get_product_num.end()){
                         Production.push_back(now_production);
-                        get_product_num[now_production] = --production_cnt;
+                        get_product_num[now_production] = --production_cnt; // 产生式编号为负数
                     }
                     Action[now_state][sign_to_num[T_sign[i]]] = get_product_num[now_production];
                 }
@@ -632,7 +653,7 @@ public:
 
         if(now_product[len - 1] == '>' && now_product[len - 2] == '-'){
             now_product.erase(now_product.end() - 2, now_product.end());
-            return 0;
+            return 0;   // 归约式中的箭头
         }
 
         for(i = len - 1; i >= 0; i--){
@@ -643,20 +664,167 @@ public:
         now_product.erase(now_product.begin() + i + 1, now_product.end());
         return sign_to_num[now_sign];
     }
+
+    // 填充符号表
+    void enterTable(NestSignTable * nowTable, string name, string type, int width, void *toVal){
+        // 哈希一下，得到其在符号表中的下标
+        nowTable->get_SignTable_pos[name] = ++nowTable->sign_table_cnt;
+        // 将变量的名字和类型填入符号表中
+        nowTable->SignTable[nowTable->sign_table_cnt].name = name;
+        nowTable->SignTable[nowTable->sign_table_cnt].type = type;
+        nowTable->SignTable[nowTable->sign_table_cnt].width = width;
+        nowTable->SignTable[nowTable->sign_table_cnt].offset = nowTable->offset;
+        nowTable->SignTable[nowTable->sign_table_cnt].toVal = toVal;
+        nowTable->offset += width;
+        //cout << name << " " << type << " " << nowTable->sign_table_cnt << endl;
+    }
+
+
+    // 创建一个新的符号表
+    NestSignTable *mktable(NestSignTable * nowTable){
+        NestSignTable *newTable = new NestSignTable;
+        newTable->lastTable = nowTable;                     // 指向上一层符号表
+        stack_sign_table[++table_top] = MP(newTable, 0);    // 更新符号表栈
+        return newTable;
+    }
+
+    // 根据产生式进行语义分析
+    void SemanticAnalysis(string Production, AttrNodeType & ansAttr)
+    {
+        // 处理参数列表
+        if(Production == "identifier_list -> id"){
+            attr_node_list.clear();         // 待处理队列清空
+            attr_node_list.push_back(Stack_attr[attr_top]);
+            return;
+        }
+        if(Production == "identifier_list -> identifier_list , id"){
+            attr_node_list.push_back(Stack_attr[attr_top]);       // 向队尾增加一个
+            return;
+        }
+
+        // 声明语句
+        if(Production == "declarations -> var declaration semi"){
+            return;
+        }
+        if(Production == "declaration -> declaration semi identifier_list : type"){
+            // 将队列中的属性节点依次填入对应的符号表中
+            for(unsigned int i = 0; i < attr_node_list.size(); i++)
+                enterTable(nowSignTable, attr_node_list[i].name, Stack_attr[attr_top].type,
+                            Stack_attr[attr_top].width, (void*)NULL);
+            return;
+        }
+        if(Production == "declaration -> identifier_list : type"){
+            // 将队列中的属性节点依次填入对应的符号表中
+            for(unsigned int i = 0; i < attr_node_list.size(); i++)
+                enterTable(nowSignTable, attr_node_list[i].name, Stack_attr[attr_top].type,
+                            Stack_attr[attr_top].width, (void*)NULL);
+            return;
+        }
+        if(Production == "type -> standard_type"){
+            ansAttr.type = Stack_attr[attr_top].type;
+            ansAttr.width = Stack_attr[attr_top].width;
+            return;
+        }
+        if(Production == "type -> array [ digits .. digits ] of standard_type"){
+            // 数组类型，使用类型表达式
+            int low_index = atoi(Stack_attr[attr_top - 5].value.c_str());
+            int high_index = atoi(Stack_attr[attr_top - 3].value.c_str());
+            int num = high_index - low_index + 1;
+            char strNum[100];
+            sprintf(strNum, "%d", num);
+
+            ansAttr.type = "array(" +  string(strNum) + "," + Stack_attr[attr_top].type + ")";
+            ansAttr.width = num * Stack_attr[attr_top].width;
+            return;
+        }
+
+        if(Production == "standard_type -> integer"){
+            ansAttr.type = "integer";
+            ansAttr.width = 4;
+            return;
+        }
+        if(Production == "standard_type -> real"){
+            ansAttr.type = "real";
+            ansAttr.width = 8;
+            return;
+        }
+
+        // 过程和函数的翻译
+        if(Production == "subprogram_declarations -> @"){
+            // 创建新符号表，并将当前符号表更新为此新符号表，同时更新了符号表栈
+            nowSignTable = mktable(nowSignTable);
+            return;
+        }
+        if(Production == "subprogram_head -> procedure id arguments semi"){
+            // 当前过程声明语句，记录其类型
+            nowSignTable->name = Stack_attr[attr_top - 2].name;
+            nowSignTable->type = "procedure";
+            return;
+        }
+        if(Production == "subprogram_head -> function id arguments : standard_type semi"){
+            // 当前函数声明语句，记录其类型
+            nowSignTable->name = Stack_attr[attr_top - 4].name;
+            nowSignTable->type = "function";
+            nowSignTable->ret_val = Stack_attr[attr_top - 1].type;
+            return;
+        }
+        if(Production == "subprogram_declaration -> subprogram_head declarations compound_statement"){
+            // 子过程处理完毕，符号表应退回为上一层,并在 上一层符号表中标记此符号表地址
+            NestSignTable *lastTable = nowSignTable->lastTable;
+            enterTable(lastTable, nowSignTable->name, nowSignTable->type,
+                       4, (void*)nowSignTable);
+            table_top--;        // 符号表栈退一层
+            nowSignTable = lastTable;       // 指向上一层的符号表
+            return;
+        }
+
+
+
+
+
+
+    }
+
+    // 获取终结符的属性值
+    void get_attr_from_T(AttrNodeType & T_Node, int now_T, void *now_T_data)
+    {
+        string temp = "";
+        if(now_T_data != NULL){
+            temp= string((char*)now_T_data);
+        }
+
+        if(now_T == ID){
+            T_Node.name = temp;
+        }
+        T_Node.value = temp;
+    }
+
+
     // 语法分析过程
-    void work(vector<TokenPairType> word_buf){
+    void work(vector<TokenPairType> & word_buf){
         int state, op, now_sign, now_T;
+        void *now_T_data;
+        vector<pair<int, void*> > now_T_list;   // 存储分析过程中终结符及其数据的序列
         string now_product;
         word_buf.push_back(make_pair(0, (void*)NULL));     // 输入序列后加入 '#'
+        attr_top = 0;           // 属性栈清空
+        // 创建总的符号表, 并存入栈中
+        nowSignTable = new NestSignTable;
+        stack_sign_table[++table_top] = MP(nowSignTable, 0);
 
         turn_sign_to_num();
         make_production();
         make_table();
 
+        now_T_list.clear();
         for(unsigned int i = 0; i < word_buf.size(); i++){
+
             state = Stack.top().first;
             now_T = word_buf[i].first;
+            now_T_data = word_buf[i].second;
+            //printf("(%d, %s) ", now_T, word_buf[i].second);
             op = Action[state][now_T];
+
             //printf("%d  %d   op = %d\n", state, now_T, op);
             if(op == ACC){
                 Stack.pop();        // 此时栈恢复到初始状态，方便下一个句子使用
@@ -670,40 +838,95 @@ public:
             // 移进操作
             if(op > 0){
                 Stack.push(make_pair(op, now_T));
+                Stack_word.push(word_buf[i]);
+                // 更新属性栈，并获取其属性
+                ++attr_top;
+
+                get_attr_from_T(Stack_attr[attr_top], now_T, now_T_data);
                 continue;
             }
             // 归约操作
             now_product = Production[-op];
-            cout << now_product << endl;
+           // cout << now_product << endl;    // 用这个产生式去归约
+
+            string temp_product = now_product;      // 暂存产生式
+
+
+            AttrNodeType ansAttr;               // 存储语义分析结果节点
+            SemanticAnalysis(temp_product, ansAttr);  // 进行语义分析
+
             while(true){
                 now_sign = get_next_sign(now_product);
                 if(now_sign == 0){
-                    now_sign = -get_next_sign(now_product);
+                    now_sign = -get_next_sign(now_product); // 归约出的变量
                     state = Stack.top().first;
                     // 根据Goto表转移状态
                     Stack.push(make_pair(Goto[state][now_sign], -now_sign));
+                    Stack_word.push(make_pair(0, (void*)NULL));    // 为与Stack保持一致，加入一个空对
+                    Stack_attr[++attr_top] = ansAttr;           // 语义属性分析结果入栈
                     i--;        // 此时不能移进终结符
+
+                    // 语义分析相关
+//                    cout << temp_product << "   ";
+//                    for(unsigned int i = 0; i < now_T_list.size(); i++)
+//                        printf("(%d,%s) ", now_T_list[i].first, (char*)now_T_list[i].second);
+
+                    now_T_list.clear(); // 本次产生式分析完毕，清空临时序列
+//                    cout << endl;
                     break;
                 }
                 if(now_sign == sign_to_num["@"]) continue;  // 空转移
-                if(Stack.top().second == now_sign)
+                if(Stack.top().second == now_sign){     // 取出此时的终结符
+                    if(Stack.top().second > 0)
+                        now_T_list.push_back(Stack_word.top());     // 存储分析此产生式时的终结符序列
+                    Stack_word.pop();
                     Stack.pop();
+                    attr_top--;         //  语义属性栈弹栈
+                }
                 else
                     Error_Handle(i, now_sign);
             }
         }
-        printf("************Syntax Analyze Complete!************\n");
+        cout << Production.size() << endl;
+        printf("************Syntax Analyze Complete!************\n\n");
     }
 };
+
+// 打印所有符号表的内容
+void print_SignTable(){
+    queue<NestSignTable *> Q;
+    while(!Q.empty()) Q.pop();
+    Q.push(nowSignTable);
+    while(!Q.empty()){
+        NestSignTable * now = Q.front(); Q.pop();
+        printf("-------------TableName:%s -----------------\n", now->name.c_str());
+        for(int i = 1; i <= now->sign_table_cnt; i++){
+            printf("name = %s\t width = %d\t type = %s\t offset = %d\n",
+                   now->SignTable[i].name.c_str(),
+                   now->SignTable[i].width,
+                   now->SignTable[i].type.c_str(),
+                   now->SignTable[i].offset);
+            if(now->SignTable[i].type == "function" ||
+               now->SignTable[i].type == "procedure"){
+                Q.push((NestSignTable*) now->SignTable[i].toVal);
+            }
+
+        }
+    }
+
+
+}
 
 int main()
 {
     LexicoAnalyzer A;
     SyntaxAnalyzer B;
 
-    vector<TokenPairType> word_list = A.work();
-
+    A.work();
     B.work(word_list);
-//    B.make_table();
+
+    print_SignTable();
+
+
     return 0;
 }

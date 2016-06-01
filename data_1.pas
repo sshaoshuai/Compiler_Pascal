@@ -38,4 +38,3 @@ Begin
       writeln(ans);
     end;
 End.
-SSS

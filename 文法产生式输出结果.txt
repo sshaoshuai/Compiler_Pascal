@@ -1,0 +1,342 @@
+word_list: 236
+************Lexico Analyze Complete!************
+
+identifier_list -> id   (36,first)
+identifier_list -> identifier_list , id   (36,second) (52,(null))
+identifier_list -> id   (36,i)
+identifier_list -> identifier_list , id   (36,j) (52,(null))
+identifier_list -> identifier_list , id   (36,k) (52,(null))
+identifier_list -> identifier_list , id   (36,p) (52,(null))
+identifier_list -> identifier_list , id   (36,tot) (52,(null))
+identifier_list -> identifier_list , id   (36,n) (52,(null))
+identifier_list -> identifier_list , id   (36,t) (52,(null))
+identifier_list -> identifier_list , id   (36,m) (52,(null))
+standard_type -> integer   (64,integer)
+type -> standard_type
+declaration -> identifier_list : type   (56,(null))
+identifier_list -> id   (36,l)
+identifier_list -> identifier_list , id   (36,w) (52,(null))
+standard_type -> integer   (64,integer)
+type -> array [ digits .. digits ] of standard_type   (21,of) (62,(null)) (37,5006) (55,(null)) (37,1) (61,(null)) (2,array)
+declaration -> declaration semi identifier_list : type   (56,(null)) (58,(null))
+identifier_list -> id   (36,f)
+standard_type -> integer   (64,integer)
+type -> array [ digits .. digits ] of standard_type   (21,of) (62,(null)) (37,5006) (55,(null)) (37,0) (61,(null)) (2,array)
+declaration -> declaration semi identifier_list : type   (56,(null)) (58,(null))
+declarations -> var declaration semi   (58,(null)) (33,Var)
+
+// 进入子过程部分
+subprogram_declarations -> @
+identifier_list -> id   (36,ll)
+identifier_list -> identifier_list , id   (36,rr) (52,(null))
+standard_type -> integer   (64,integer)
+type -> standard_type
+parameter_list -> identifier_list : type   (56,(null))
+arguments -> ( parameter_list )   (51,(null)) (50,(null))
+subprogram_head -> procedure id arguments semi   (58,(null)) (36,qsort) (24,Procedure)
+identifier_list -> id   (36,mid)
+identifier_list -> identifier_list , id   (36,t) (52,(null))
+identifier_list -> identifier_list , id   (36,i) (52,(null))
+identifier_list -> identifier_list , id   (36,j) (52,(null))
+identifier_list -> identifier_list , id   (36,mid2) (52,(null))
+standard_type -> integer   (64,integer)
+type -> standard_type
+declaration -> identifier_list : type   (56,(null))
+declarations -> var declaration semi   (58,(null)) (33,var)
+variable -> id   (36,i)
+assignop -> :=   (57,(null))
+factor -> id   (36,ll)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+statement -> variable assignop expression
+statement_list -> statement
+variable -> id   (36,j)
+assignop -> :=   (57,(null))
+factor -> id   (36,rr)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+statement -> variable assignop expression
+statement_list -> statement_list semi statement   (58,(null))
+variable -> id   (36,mid)
+assignop -> :=   (57,(null))
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+statement -> variable assignop expression
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+relop -> <   (45,(null))
+factor -> id   (36,mid)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,inc)
+statement -> procedure_statement
+statement -> while expression do statement   (7,do) (34,while)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+relop -> >   (46,(null))
+factor -> id   (36,mid)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,j)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,dec)
+statement -> procedure_statement
+statement -> while expression do statement   (7,do) (34,while)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+relop -> <   (45,(null))
+factor -> id   (36,j)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+variable -> id   (36,t)
+assignop -> :=   (57,(null))
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+statement -> variable assignop expression
+statement_list -> statement
+variable -> id   (36,l)
+assignop -> :=   (57,(null))
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+statement -> variable assignop expression
+statement_list -> statement_list semi statement   (58,(null))
+variable -> id   (36,l)
+assignop -> :=   (57,(null))
+factor -> id   (36,t)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+statement -> variable assignop expression
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,inc)
+statement -> procedure_statement
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,j)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,dec)
+statement -> procedure_statement
+statement_list -> statement_list semi statement   (58,(null))
+optional_statements -> statement_list
+compound_statement -> begin optional_statements end   (10,end) (3,begin)
+statement -> compound_statement
+procedure_statement -> id   (36,pass)
+statement -> procedure_statement
+statement -> if expression then statement else statement   (9,else) (29,then) (15,if)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+relop -> <   (45,(null))
+factor -> id   (36,rr)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+factor -> id   (36,rr)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression_list , expression   (52,(null))
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,qsort)
+statement -> procedure_statement
+procedure_statement -> id   (36,pass)
+statement -> procedure_statement
+statement -> if expression then statement else statement   (9,else) (29,then) (15,if)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,ll)
+term -> factor
+simple_expression -> term
+relop -> >   (46,(null))
+factor -> id   (36,j)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,ll)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+factor -> id   (36,j)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression_list , expression   (52,(null))
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,qsort)
+statement -> procedure_statement
+procedure_statement -> id   (36,pass)
+statement -> procedure_statement
+statement -> if expression then statement else statement   (9,else) (29,then) (15,if)
+statement_list -> statement_list semi statement   (58,(null))
+optional_statements -> statement_list
+compound_statement -> begin optional_statements end   (10,end) (3,begin)
+subprogram_declaration -> subprogram_head declarations compound_statement
+subprogram_declarations -> subprogram_declarations subprogram_declaration semi   (58,(null))
+
+
+// 进入主程序部分
+factor -> id   (36,t)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,readln)
+statement -> procedure_statement
+statement_list -> statement
+factor -> id   (36,j)
+term -> factor
+simple_expression -> term
+relop -> <   (45,(null))
+factor -> id   (36,t)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,n)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,readln)
+statement -> procedure_statement
+statement_list -> statement
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+relop -> <   (45,(null))
+factor -> id   (36,n)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,read)
+statement -> procedure_statement
+statement -> while expression do statement   (7,do) (34,while)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> num   (37,1)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+factor -> id   (36,n)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression_list , expression   (52,(null))
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,qsort)
+statement -> procedure_statement
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+relop -> <   (45,(null))
+factor -> id   (36,n)
+term -> factor
+simple_expression -> term
+expression -> simple_expression relop simple_expression
+factor -> ( expression )   (51,(null)) (50,(null))
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+factor -> id   (36,l)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,writeln)
+statement -> procedure_statement
+statement -> while expression do statement   (7,do) (34,while)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,hha)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,writeln)
+statement -> procedure_statement
+statement_list -> statement_list semi statement   (58,(null))
+optional_statements -> statement_list
+compound_statement -> begin optional_statements end   (10,end) (3,begin)
+statement -> compound_statement
+statement -> while expression do statement   (7,do) (34,while)
+statement_list -> statement_list semi statement   (58,(null))
+factor -> id   (36,i)
+term -> factor
+simple_expression -> term
+expression -> simple_expression
+expression_list -> expression
+procedure_statement -> id ( expression_list )   (51,(null)) (50,(null)) (36,inc)
+statement -> procedure_statement
+statement_list -> statement_list semi statement   (58,(null))
+optional_statements -> statement_list
+compound_statement -> begin optional_statements end   (10,End) (3,Begin)
+program -> prog id ( identifier_list ) semi declarations subprogram_declarations compound_statement   (58,(null)) (51,(null)) (50,(null)) (36,SSS) (25,Prog)
+67
+************Syntax Analyze Complete!************
+
+
+Process returned 0 (0x0)   execution time : 0.717 s
+Press any key to continue.
